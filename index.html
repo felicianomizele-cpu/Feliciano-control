@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feliciano IMTATIC- Bluetooth</title>
+    <style>
+        body { font-family: Arial; max-width: 600px; margin: auto; padding: 20px; }
+        button { padding: 10px; margin: 5px; font-size: 16px; }
+        input, select { padding: 8px; margin: 5px; width: 90%; }
+        .status { background: #eee; padding: 10px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>🔒 Fechadura Inteligente</h1>
+    <div class="status" id="status">Desconectado</div>
+    <button id="connectBtn">🔌 Conectar ao ESP32</button>
+    <button id="openBtn" disabled>🔓 Abrir Fechadura</button>
+    
+    <hr>
+    <h3>Cadastrar Usuário</h3>
+    <input type="text" id="userName" placeholder="Nome do usuário">
+    <input type="time" id="inTime" value="08:00">
+    <input type="time" id="outTime" value="17:30">
+    <button id="cadastrarBtn" disabled>➕ Cadastrar</button>
+    <button id="listarBtn" disabled>📋 Listar Usuários</button>
+    <pre id="output"></pre>
+
+    <script>
+        let device = null;
+        let characteristic = null;
+        const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b"; // UUID genérico
+        const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+
+        async function connect() {
+            try {
+                device = await navigator.bluetooth.requestDevice({
+                    filters: [{ namePrefix: "ESP32_Fechadura" }],
+                    optionalServices: [SERVICE_UUID]
+                });
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService(SERVICE_UUID);
+                characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+                document.getElementById("status").innerText = "✅ Conectado a " + device.name;
+                document.getElementById("connectBtn").disabled = true;
+                document.getElementById("openBtn").disabled = false;
+                document.getElementById("cadastrarBtn").disabled = false;
+                document.getElementById("listarBtn").disabled = false;
+                
+                // Receber respostas do ESP32
+                await characteristic.startNotifications();
+                characteristic.addEventListener("characteristicvaluechanged", (event) => {
+                    const value = new TextDecoder().decode(event.target.value);
+                    document.getElementById("output").innerText = value;
+                });
+            } catch (error) {
+                document.getElementById("status").innerText = "❌ Erro: " + error.message;
+            }
+        }
+
+        async function sendCommand(cmd) {
+            if (!characteristic) return;
+            const encoder = new TextEncoder();
+            await characteristic.writeValue(encoder.encode(cmd + "\n"));
+        }
+
+        document.getElementById("connectBtn").addEventListener("click", connect);
+        
+        document.getElementById("openBtn").addEventListener("click", async () => {
+            const agora = new Date();
+            const horarioAtual = agora.getHours().toString().padStart(2,'0') + ":" + 
+                                  agora.getMinutes().toString().padStart(2,'0');
+            await sendCommand("ABRIR:" + horarioAtual);
+        });
+        
+        document.getElementById("cadastrarBtn").addEventListener("click", async () => {
+            const nome = document.getElementById("userName").value;
+            const entrada = document.getElementById("inTime").value;
+            const saida = document.getElementById("outTime").value;
+            if (nome && entrada && saida) {
+                await sendCommand(`CADASTRAR:${nome},${entrada},${saida}`);
+            } else {
+                alert("Preencha todos os campos");
+            }
+        });
+        
+        document.getElementById("listarBtn").addEventListener("click", async () => {
+            await sendCommand("LISTAR");
+        });
+    </script>
+</body>
+</html>
