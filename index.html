@@ -1,92 +1,96 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Feliciano IMTATIC- Bluetooth</title>
-    <style>
-        body { font-family: Arial; max-width: 600px; margin: auto; padding: 20px; }
-        button { padding: 10px; margin: 5px; font-size: 16px; }
-        input, select { padding: 8px; margin: 5px; width: 90%; }
-        .status { background: #eee; padding: 10px; margin: 10px 0; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Feliciano AI v2.0</title>
+<style>
+body{font-family:Arial;background:#0b1220;color:#fff;margin:0}
+.screen{display:none;padding:20px}
+.active{display:block}
+button{padding:12px 18px;margin:8px;border:none;border-radius:8px}
+input{display:block;width:95%;padding:10px;margin:8px 0}
+#fab{position:fixed;right:20px;bottom:20px;border-radius:50%;width:70px;height:70px;font-size:16px}
+</style>
 </head>
 <body>
-    <h1>🔒 Fechadura Inteligente</h1>
-    <div class="status" id="status">Desconectado</div>
-    <button id="connectBtn">🔌 Conectar ao ESP32</button>
-    <button id="openBtn" disabled>🔓 Abrir Fechadura</button>
-    
-    <hr>
-    <h3>Cadastrar Usuário</h3>
-    <input type="text" id="userName" placeholder="Nome do usuário">
-    <input type="time" id="inTime" value="08:00">
-    <input type="time" id="outTime" value="17:30">
-    <button id="cadastrarBtn" disabled>➕ Cadastrar</button>
-    <button id="listarBtn" disabled>📋 Listar Usuários</button>
-    <pre id="output"></pre>
+<div id="s1" class="screen active">
+<h2>Feliciano AI v2.0</h2>
+<button onclick="show('s2')">Iniciar</button>
+</div>
 
-    <script>
-        let device = null;
-        let characteristic = null;
-        const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b"; // UUID genérico
-        const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+<div id="s2" class="screen">
+<h2>Bluetooth</h2>
+<button onclick="connectBLE()">Conectar ao ESP32-S3</button>
+<p id="ble">Desconectado</p>
+<button onclick="show('s3')">Continuar</button>
+</div>
 
-        async function connect() {
-            try {
-                device = await navigator.bluetooth.requestDevice({
-                    filters: [{ namePrefix: "ESP32_Fechadura" }],
-                    optionalServices: [SERVICE_UUID]
-                });
-                const server = await device.gatt.connect();
-                const service = await server.getPrimaryService(SERVICE_UUID);
-                characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
-                document.getElementById("status").innerText = "✅ Conectado a " + device.name;
-                document.getElementById("connectBtn").disabled = true;
-                document.getElementById("openBtn").disabled = false;
-                document.getElementById("cadastrarBtn").disabled = false;
-                document.getElementById("listarBtn").disabled = false;
-                
-                // Receber respostas do ESP32
-                await characteristic.startNotifications();
-                characteristic.addEventListener("characteristicvaluechanged", (event) => {
-                    const value = new TextDecoder().decode(event.target.value);
-                    document.getElementById("output").innerText = value;
-                });
-            } catch (error) {
-                document.getElementById("status").innerText = "❌ Erro: " + error.message;
-            }
-        }
+<div id="s3" class="screen">
+<h2>Login</h2>
+<input id="user" placeholder="Utilizador">
+<input id="pass" type="password" placeholder="Senha">
+<button onclick="login()">Entrar</button>
+<button onclick="show('s4')">Cadastrar</button>
+</div>
 
-        async function sendCommand(cmd) {
-            if (!characteristic) return;
-            const encoder = new TextEncoder();
-            await characteristic.writeValue(encoder.encode(cmd + "\n"));
-        }
+<div id="s4" class="screen">
+<h2>Cadastro</h2>
+<input id="nuser" placeholder="Utilizador">
+<input id="npass" type="password" placeholder="Senha">
+<input id="code" placeholder="Código pessoal">
+<button onclick="register()">Guardar</button>
+</div>
 
-        document.getElementById("connectBtn").addEventListener("click", connect);
-        
-        document.getElementById("openBtn").addEventListener("click", async () => {
-            const agora = new Date();
-            const horarioAtual = agora.getHours().toString().padStart(2,'0') + ":" + 
-                                  agora.getMinutes().toString().padStart(2,'0');
-            await sendCommand("ABRIR:" + horarioAtual);
-        });
-        
-        document.getElementById("cadastrarBtn").addEventListener("click", async () => {
-            const nome = document.getElementById("userName").value;
-            const entrada = document.getElementById("inTime").value;
-            const saida = document.getElementById("outTime").value;
-            if (nome && entrada && saida) {
-                await sendCommand(`CADASTRAR:${nome},${entrada},${saida}`);
-            } else {
-                alert("Preencha todos os campos");
-            }
-        });
-        
-        document.getElementById("listarBtn").addEventListener("click", async () => {
-            await sendCommand("LISTAR");
-        });
-    </script>
-</body>
-</html>
+<div id="s5" class="screen">
+<h2>Painel</h2>
+<input id="date" type="date"><input id="in" type="time"><input id="out" type="time">
+<button onclick="saveSchedule()">Guardar Agendamento</button>
+<button onclick="enableOpen()">Validar Código</button>
+<button onclick="showHistory()">Histórico</button>
+</div>
+
+<button id="fab" style="display:none" onclick="openDoor()">Abrir</button>
+
+<pre id="hist"></pre>
+
+<script>
+let characteristic=null;
+function show(id){document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));document.getElementById(id).classList.add('active');}
+async function connectBLE(){
+try{
+const d=await navigator.bluetooth.requestDevice({filters:[{name:'Feliciano_AI'}],optionalServices:["12345678-1234-1234-1234-1234567890ab"]});
+const s=await d.gatt.connect();
+const svc=await s.getPrimaryService("12345678-1234-1234-1234-1234567890ab");
+characteristic=await svc.getCharacteristic("abcdefab-1234-5678-1234-abcdefabcdef");
+ble.textContent="Conectado";
+}catch(e){alert(e);}
+}
+function register(){
+localStorage.user=JSON.stringify({u:nuser.value,p:npass.value,c:code.value});
+alert("Cadastrado");
+show('s3');
+}
+function login(){
+let u=JSON.parse(localStorage.user||"null");
+if(u&&user.value==u.u&&pass.value==u.p)show('s5');else alert("Dados inválidos");
+}
+function saveSchedule(){
+localStorage.sch=JSON.stringify({d:date.value,i:document.getElementById('in').value,o:document.getElementById('out').value});
+alert("Agendado");
+}
+function enableOpen(){
+let c=prompt("Código pessoal");
+let u=JSON.parse(localStorage.user);
+if(c==u.c){fab.style.display='block';}else alert("Código errado");
+}
+async function openDoor(){
+if(characteristic){await characteristic.writeValue(new TextEncoder().encode("ABRIR"));}
+let h=JSON.parse(localStorage.hist||"[]");
+h.push(new Date().toLocaleString());
+localStorage.hist=JSON.stringify(h);
+alert("Comando enviado");
+}
+function showHistory(){hist.textContent=(JSON.parse(localStorage.hist||"[]")).join("\n");}
+</script>
+</body></html>
